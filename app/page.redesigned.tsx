@@ -9,14 +9,21 @@ import EnhancedAudioPlayer from "../src/components/EnhancedAudioPlayer";
 import { BookmarkProvider, useBookmarks } from "../src/context/BookmarkContext";
 import { fetchSurah, Surah } from "../src/services/quranApi";
 
+const reciters = [
+  { id: 1, name: "Mishary Rashid Al Afasy" },
+  { id: 2, name: "Abu Bakr Al Shatri" },
+  { id: 3, name: "Nasser Al Qatami" },
+  { id: 4, name: "Yasser Al Dosari" },
+  { id: 5, name: "Hani Ar Rifai" },
+];
+
 const SurahReaderContent: React.FC = () => {
-  const [mounted, setMounted] = useState(false);
   const [currentSurah, setCurrentSurah] = useState<Surah | null>(null);
   const [loading, setLoading] = useState(true);
   const [recitingSurah, setRecitingSurah] = useState(false);
   const [currentAyahIdx, setCurrentAyahIdx] = useState<number | null>(null);
   const [playingAyah, setPlayingAyah] = useState<number | null>(null);
-  const [reciterId, setReciterId] = useState(7);
+  const [reciterId, setReciterId] = useState<number>(1);
   const [hoveredAyah, setHoveredAyah] = useState<number | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showAudioControls, setShowAudioControls] = useState(false);
@@ -32,17 +39,9 @@ const SurahReaderContent: React.FC = () => {
     showTranslation: true,
     translationLanguage: "both",
     showTransliteration: false,
-    englishTranslation: "en.asad",
-    urduTranslation: "ur.ahmedali",
   });
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
-
-  useEffect(() => {
-    if (!mounted) return;
-    
     const savedSettings = localStorage.getItem("quran-reader-settings");
     if (savedSettings) {
       try {
@@ -60,7 +59,7 @@ const SurahReaderContent: React.FC = () => {
         console.error("Failed to parse volume", e);
       }
     }
-  }, [mounted]);
+  }, []);
 
   useEffect(() => {
     localStorage.setItem("quran-reader-settings", JSON.stringify(settings));
@@ -74,20 +73,9 @@ const SurahReaderContent: React.FC = () => {
     loadSurah(1);
   }, []);
 
-  // Reload surah when translation settings change
-  useEffect(() => {
-    if (currentSurah) {
-      loadSurah(currentSurah.number);
-    }
-  }, [settings.englishTranslation, settings.urduTranslation]);
-
   const loadSurah = async (surahNumber: number) => {
     setLoading(true);
-    const surah = await fetchSurah(
-      surahNumber, 
-      settings.englishTranslation, 
-      settings.urduTranslation
-    );
+    const surah = await fetchSurah(surahNumber);
     if (surah) {
       setCurrentSurah(surah);
     }
@@ -96,8 +84,9 @@ const SurahReaderContent: React.FC = () => {
 
   const ayahs = currentSurah?.ayahs || [];
   
-  // Bismillah is now handled at the API level - already trimmed from first ayah
-  const displayAyahs = ayahs;
+  // Check if first ayah is Bismillah to avoid duplication
+  const firstAyahIsBismillah = ayahs.length > 0 && ayahs[0].text.includes("بِسْمِ اللَّهِ الرَّحْمَٰنِ الرَّحِيمِ");
+  const displayAyahs = (currentSurah?.number === 1 || currentSurah?.number === 9 || firstAyahIsBismillah) ? ayahs : ayahs;
 
   const startReciteSurah = () => {
     setRecitingSurah(true);
@@ -124,16 +113,6 @@ const SurahReaderContent: React.FC = () => {
       setShowAudioControls(false);
     }
   };
-
-  // Auto-scroll to playing ayah
-  useEffect(() => {
-    if (playingAyah !== null) {
-      const ayahElement = document.getElementById(`ayah-${playingAyah}`);
-      if (ayahElement) {
-        ayahElement.scrollIntoView({ behavior: "smooth", block: "center" });
-      }
-    }
-  }, [playingAyah]);
 
   const handleAyahClick = (ayahNumberInSurah: number) => {
     setRecitingSurah(false);
@@ -198,11 +177,6 @@ const SurahReaderContent: React.FC = () => {
         </div>
       </div>
     );
-  }
-
-  // Prevent hydration mismatch by not rendering until mounted
-  if (!mounted) {
-    return null;
   }
 
   return (
@@ -288,16 +262,15 @@ const SurahReaderContent: React.FC = () => {
                 {isFavorite(currentSurah.number) ? "⭐" : "☆"}
               </button>
               <select
-                className="border border-[#e2c275] rounded-lg px-3 py-2 bg-white text-[#7c6f57] focus:outline-none text-sm max-w-[200px]"
+                className="border border-[#e2c275] rounded-lg px-3 py-2 bg-white text-[#7c6f57] focus:outline-none text-sm"
                 value={reciterId}
                 onChange={(e) => setReciterId(Number(e.target.value))}
               >
-                <option value={7}>Mishary Rashid Alafasy</option>
-                <option value={1}>Abdul Basit</option>
-                <option value={2}>Abdur Rahman As Sudais</option>
-                <option value={3}>Saad Al Ghamdi</option>
-                <option value={5}>Maher Al Muaiqly</option>
-                <option value={9}>Abu Bakr Al Shatri</option>
+                {reciters.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name}
+                  </option>
+                ))}
               </select>
               <button
                 onClick={() => setShowSettings(true)}
@@ -312,7 +285,6 @@ const SurahReaderContent: React.FC = () => {
         {/* Quran Reading Area */}
         <div className="flex-1 overflow-y-auto px-8 py-6">
           <div className="max-w-5xl mx-auto">
-            
             {loading ? (
               <div className="flex items-center justify-center h-full">
                 <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#bfa76a]"></div>
@@ -393,13 +365,10 @@ const SurahReaderContent: React.FC = () => {
 
                       {/* Arabic Text */}
                       <div
-                        className={`${getFontSizeClass()} ${textColor} leading-relaxed mb-4 text-right`}
-                        style={{ direction: "rtl", lineHeight: "2.2", fontFamily: "'Amiri Quran', 'Scheherazade New', 'Amiri', serif" }}
+                        className={`${getFontSizeClass()} font-[Amiri,serif] ${textColor} leading-relaxed mb-4 text-right`}
+                        style={{ direction: "rtl", lineHeight: "2.2" }}
                       >
                         {ayah.text}
-                        <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-[#e2c275]/20 text-[#bfa76a] font-bold border border-[#e2c275]/50 mx-2" style={{ fontSize: "16px", lineHeight: "1" }}>
-                          ۝
-                        </span>
                       </div>
 
                       {/* Translation (if enabled) */}
